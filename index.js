@@ -1,41 +1,59 @@
-const express = require("express");
-const multer = require("multer");
-const cors = require("cors");
-const { exec } = require("child_process");
-const fs = require("fs");
-const path = require("path");
+const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { exec } = require('child_process'); 
 
 const app = express();
-const upload = multer({ dest: "uploads/" });
-const PORT = 3006;
+const PORT = 3005;
 
-app.use(cors());
+const upload = multer({
+    dest: 'uploads/', 
+    limits: { fileSize: 50 * 1024 * 1024 } 
+});
 
-app.use(express.json());
 
-app.post("/convert", upload.single("pdf"), (req, res) => {
-  const file = req.file;
-  const outputPath = path.join(__dirname, "outputs", `${file.filename}.html`);
-
-  const command = `pdf2htmlEX "${file.path}" "${outputPath}"`;
-
-  exec(command, (err, stdout, stderr) => {
-    if (err) {
-      console.error("Conversion error:", stderr);
-      return res.status(500).json({ error: "Conversion failed." });
+app.post('/convert', upload.single('pdf'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).send('No PDF uploaded');
     }
 
-    const html = fs.readFileSync(outputPath, "utf-8");
+    const inputPath = req.file.path;
+    const originalName = path.parse(req.file.originalname).name;
+    const outputDir = path.join(__dirname, 'xml');
+    const outputPath = path.join(outputDir, originalName + '.xml');
 
-    // Clean up
-    fs.unlinkSync(file.path);
-    fs.unlinkSync(outputPath);
 
-    res.set("Content-Type", "text/html");
-    res.send(html);
-  });
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Simulate PDF to XML conversion — replace this with your logic
+    // Example: using `pdftohtml` CLI tool in XML mode
+    // command: `pdftohtml -xml inputPath outputPath`
+
+    const cmd = `pdftohtml -xml "${inputPath}" "${outputPath}"`; // Make sure `pdftohtml` is installed
+
+    exec(cmd, (error) => {
+        if (error) {
+            console.error('Conversion error:', error);
+            return res.status(500).send('Conversion failed');
+        }
+
+        // Stream the XML file back
+        res.download(outputPath, originalName + '.xml', (err) => {
+            if (err) {
+                console.error('Error sending file:', err);
+            }
+
+            // Clean up temp files
+            fs.unlinkSync(inputPath);
+            // Optional: fs.unlinkSync(outputPath);
+        });
+    });
 });
 
-app.listen(PORT, () => {
-  console.log(`PDF-to-HTML API running on http://localhost:${PORT}`);
+app.listen(3005, '0.0.0.0', () => {
+  console.log("Server started on port 3005");
 });
+
